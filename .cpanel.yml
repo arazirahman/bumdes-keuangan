@@ -3,6 +3,3 @@ deployment:
   tasks:
     - export DEPLOYPATH=/home/telb4816/public_html/simkeubumdes.telagawarna.site
     - /bin/mv public $DEPLOYPATH/
-    - /bin/mv -f public/index.html $DEPLOYPATH/
-    - /bin/mv -f public/robots.txt $DEPLOYPATH/
-    - /bin/mv -f public/.htaccess $DEPLOYPATH/
