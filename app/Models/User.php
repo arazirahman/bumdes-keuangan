@@ -45,4 +45,9 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public function village()
+    {
+        return $this->belongsTo(\App\Models\Village::class);
+    }
 }

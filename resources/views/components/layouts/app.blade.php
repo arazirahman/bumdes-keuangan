@@ -32,47 +32,48 @@
     </div>
 
     @auth
-    <nav class="mb-6 flex flex-wrap items-center gap-2">
-      <a href="{{ route('dashboard') }}"
-         class="ml-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
-        Dashboard
-      </a>
+      @php
+        $active = 'bg-slate-900 text-white';
+        $normal = 'bg-white';
+      @endphp
 
-      <a href="{{ route('transactions.index') }}"
-         class="ml-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
-        Transaksi
-      </a>
+      <nav class="mb-6 flex flex-wrap items-center gap-2">
 
-      {{-- LAPORAN: superadmin saja --}}
-      @if(auth()->user()->role === 'superadmin')
-        <a href="{{ route('reports.index') }}"
-           class="ml-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
-          Laporan
+        <a href="{{ route('dashboard') }}"
+           class="rounded-xl border px-4 py-2 text-sm hover:bg-slate-50 {{ request()->routeIs('dashboard') ? $active : $normal }}">
+          Dashboard
         </a>
-      @endif
 
-      {{-- ASET: superadmin saja --}}
-@if(in_array(auth()->user()->role, ['operator','superadmin']))
-  <a href="{{ route('assets.index') }}"
-     class="ml-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
-    Aset
-  </a>
-@endif
-
-
-      {{-- + Tambah: operator & superadmin --}}
-      @if(in_array(auth()->user()->role, ['operator','superadmin']))
-        <a href="{{ route('transactions.create') }}"
-           class="ml-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
-          + Tambah
+        <a href="{{ route('transactions.index') }}"
+           class="rounded-xl border px-4 py-2 text-sm hover:bg-slate-50 {{ request()->routeIs('transactions.*') ? $active : $normal }}">
+          Transaksi
         </a>
-<a href="{{ route('reports.index') }}"
-     class="ml-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
-    Laporan
-  </a>
 
-      @endif
-    </nav>
+        {{-- ASET: operator & superadmin --}}
+        @if(in_array(auth()->user()->role, ['operator','superadmin']))
+          <a href="{{ route('assets.index') }}"
+             class="rounded-xl border px-4 py-2 text-sm hover:bg-slate-50 {{ request()->routeIs('assets.*') ? $active : $normal }}">
+            Aset
+          </a>
+        @endif
+
+        {{-- LAPORAN: operator & superadmin (sesuai permintaan) --}}
+        @if(in_array(auth()->user()->role, ['operator','superadmin']))
+          <a href="{{ route('reports.index') }}"
+             class="rounded-xl border px-4 py-2 text-sm hover:bg-slate-50 {{ request()->routeIs('reports.*') ? $active : $normal }}">
+            Laporan
+          </a>
+        @endif
+
+        {{-- + Tambah: operator & superadmin --}}
+        @if(in_array(auth()->user()->role, ['operator','superadmin']))
+          <a href="{{ route('transactions.create') }}"
+             class="ml-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
+            + Tambah
+          </a>
+        @endif
+
+      </nav>
     @endauth
 
     @if(session('ok'))

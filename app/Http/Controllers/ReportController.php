@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Transaction;
 use App\Models\Asset;
 use App\Models\UnitUsaha;
+use App\Models\Village;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -15,97 +16,85 @@ class ReportController extends Controller
 {
     private function buildReport(Request $request): array
     {
-        // filter bulan: YYYY-MM
+        $user = $request->user();
+
+        // bulan
         $month = $request->get('month', now()->format('Y-m'));
         $start = Carbon::createFromFormat('Y-m', $month)->startOfMonth()->toDateString();
         $end   = Carbon::createFromFormat('Y-m', $month)->endOfMonth()->toDateString();
 
-        // filter unit usaha (optional)
+        // scope desa:
+        // operator -> paksa desa miliknya
+        // superadmin -> boleh pilih desa (optional), kalau kosong -> semua desa
+        $villageId = null;
+        if ($user->role === 'operator') {
+            $villageId = $user->village_id;
+        } elseif ($request->filled('village_id')) {
+            $villageId = (int)$request->village_id;
+        }
+
+        // unit usaha optional
         $unitId = $request->get('unit_usaha_id');
 
         $baseQuery = Transaction::query()
-            ->whereBetween('trx_date', [$start, $end]);
+            ->whereBetween('trx_date', [$start, $end])
+            ->when($unitId, fn($q) => $q->where('unit_usaha_id', (int)$unitId))
+            ->when($villageId, fn($q) => $q->where('village_id', (int)$villageId));
 
-        if ($unitId) {
-            $baseQuery->where('unit_usaha_id', (int)$unitId);
-        }
-
-        // =========================
-        // a) LABA RUGI
-        // =========================
         $pendapatan = (clone $baseQuery)->where('type', 'income')->sum('amount');
         $biaya      = (clone $baseQuery)->where('type', 'expense')->sum('amount');
         $labaBersih = $pendapatan - $biaya;
 
-        // =========================
-        // b) ARUS KAS
-        // =========================
         $uangMasuk  = $pendapatan;
         $uangKeluar = $biaya;
 
-        // saldo akhir = total income - total expense (global)
-        // kalau unit dipilih → saldo akhir berdasarkan unit itu
-        $saldoQuery = Transaction::query();
-        if ($unitId) {
-            $saldoQuery->where('unit_usaha_id', (int)$unitId);
-        }
+        // saldo akhir kumulatif (ikut scope desa)
+        $saldoQuery = Transaction::query()
+            ->when($unitId, fn($q) => $q->where('unit_usaha_id', (int)$unitId))
+            ->when($villageId, fn($q) => $q->where('village_id', (int)$villageId));
 
         $saldoAkhir = (clone $saldoQuery)->where('type', 'income')->sum('amount')
             - (clone $saldoQuery)->where('type', 'expense')->sum('amount');
 
-        // =========================
-        // c) NERACA SEDERHANA
-        // =========================
-        // Modal = total pemasukan kategori yang mengandung kata "Modal"
+        // modal (kategori mengandung "Modal") ikut scope desa
         $modalQuery = Transaction::query()
             ->join('categories', 'transactions.category_id', '=', 'categories.id')
             ->where('transactions.type', 'income')
-            ->where('categories.name', 'like', '%Modal%');
-
-        if ($unitId) {
-            $modalQuery->where('transactions.unit_usaha_id', (int)$unitId);
-        }
+            ->where('categories.name', 'like', '%Modal%')
+            ->when($unitId, fn($q) => $q->where('transactions.unit_usaha_id', (int)$unitId))
+            ->when($villageId, fn($q) => $q->where('transactions.village_id', (int)$villageId));
 
         $modal = (int) $modalQuery->sum('transactions.amount');
 
-        // Kas = saldo akhir
         $kas = (int) $saldoAkhir;
 
-        // Aset lain = total aset inventaris (unit_cost * qty)
         $asetLain = (int) (Asset::query()
             ->when($unitId, fn($q) => $q->where('unit_usaha_id', (int)$unitId))
+            ->when($villageId, fn($q) => $q->where('village_id', (int)$villageId))
             ->selectRaw('COALESCE(SUM(unit_cost * qty), 0) as total')
             ->value('total') ?? 0);
 
-        // Total aset = kas + aset lain
         $totalAset = $kas + $asetLain;
-
-        // Ekuitas (versi sederhana)
-        // Catatan: agar benar-benar seimbang butuh konsep saldo laba ditahan.
-        $ekuitas = $modal;
 
         return [
             'month' => $month,
             'start' => $start,
             'end' => $end,
             'unit_usaha_id' => $unitId,
+            'village_id' => $villageId,
 
-            // Laba Rugi
             'pendapatan' => (int)$pendapatan,
             'biaya' => (int)$biaya,
             'laba_bersih' => (int)$labaBersih,
 
-            // Arus Kas
             'uang_masuk' => (int)$uangMasuk,
             'uang_keluar' => (int)$uangKeluar,
             'saldo_akhir' => (int)$saldoAkhir,
 
-            // Neraca
             'kas' => (int)$kas,
             'aset_lain' => (int)$asetLain,
             'total_aset' => (int)$totalAset,
             'modal' => (int)$modal,
-            'ekuitas' => (int)$ekuitas,
         ];
     }
 
@@ -113,12 +102,11 @@ class ReportController extends Controller
     {
         $report = $this->buildReport($request);
 
-        $units = UnitUsaha::orderBy('name')->get();
-
         return view('reports.index', [
             'title' => 'Laporan Keuangan',
             'report' => $report,
-            'units' => $units,
+            'units' => UnitUsaha::orderBy('name')->get(),
+            'villages' => Village::orderBy('name')->get(),
         ]);
     }
 

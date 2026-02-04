@@ -10,7 +10,18 @@ class AssetController extends Controller
 {
     public function index(Request $request)
     {
-        $q = Asset::with(['unitUsaha', 'creator'])->orderBy('id', 'desc');
+        $user = $request->user();
+
+        $q = Asset::with(['unitUsaha', 'creator', 'village'])->orderBy('id', 'desc');
+
+        // scope desa
+        if ($user->role === 'operator') {
+            $q->where('village_id', $user->village_id);
+        } else {
+            if ($request->filled('village_id')) {
+                $q->where('village_id', (int)$request->village_id);
+            }
+        }
 
         if ($request->filled('unit_usaha_id')) {
             $q->where('unit_usaha_id', (int)$request->unit_usaha_id);
@@ -18,10 +29,21 @@ class AssetController extends Controller
 
         $rows = $q->paginate(15)->withQueryString();
 
-        $totalValue = (int) Asset::query()
-            ->when($request->filled('unit_usaha_id'), fn($qq) => $qq->where('unit_usaha_id', (int)$request->unit_usaha_id))
-            ->selectRaw('SUM(unit_cost * qty) as total')
-            ->value('total') ?? 0;
+        $totalValueQ = Asset::query();
+
+        if ($user->role === 'operator') {
+            $totalValueQ->where('village_id', $user->village_id);
+        } elseif ($request->filled('village_id')) {
+            $totalValueQ->where('village_id', (int)$request->village_id);
+        }
+
+        if ($request->filled('unit_usaha_id')) {
+            $totalValueQ->where('unit_usaha_id', (int)$request->unit_usaha_id);
+        }
+
+        $totalValue = (int) ($totalValueQ
+            ->selectRaw('COALESCE(SUM(unit_cost * qty),0) as total')
+            ->value('total') ?? 0);
 
         return view('assets.index', [
             'title' => 'Aset/Inventaris',
@@ -54,6 +76,9 @@ class AssetController extends Controller
 
         Asset::create([
             ...$data,
+            'village_id' => $request->user()->role === 'operator'
+                ? $request->user()->village_id
+                : ($request->input('village_id') ?: null),
             'created_by' => $request->user()->id,
         ]);
 
@@ -62,6 +87,10 @@ class AssetController extends Controller
 
     public function edit(Asset $asset)
     {
+        if (auth()->user()->role === 'operator' && $asset->village_id !== auth()->user()->village_id) {
+            abort(403, 'Akses ditolak.');
+        }
+
         return view('assets.edit', [
             'title' => 'Edit Aset',
             'row' => $asset,
@@ -71,6 +100,10 @@ class AssetController extends Controller
 
     public function update(Request $request, Asset $asset)
     {
+        if ($request->user()->role === 'operator' && $asset->village_id !== $request->user()->village_id) {
+            abort(403, 'Akses ditolak.');
+        }
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:150'],
             'acquired_date' => ['nullable', 'date'],

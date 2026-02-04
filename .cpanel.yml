@@ -1,5 +1,0 @@
----
-deployment:
-  tasks:
-    - export DEPLOYPATH=/home/telb4816/public_html/simkeubumdes.telagawarna.site
-    - /bin/mv public $DEPLOYPATH/

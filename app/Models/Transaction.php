@@ -35,4 +35,9 @@ class Transaction extends Model
     {
         return $this->belongsTo(User::class, 'created_by');
     }
+
+    public function village()
+    {
+        return $this->belongsTo(\App\Models\Village::class);
+    }
 }

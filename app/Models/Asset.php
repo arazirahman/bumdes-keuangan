@@ -36,4 +36,9 @@ class Asset extends Model
     {
         return (int)$this->unit_cost * (int)$this->qty;
     }
+
+    public function village()
+    {
+        return $this->belongsTo(\App\Models\Village::class);
+    }
 }
